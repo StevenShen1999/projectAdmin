@@ -1,10 +1,12 @@
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import PatternFill
 from datetime import datetime
+from copy import copy
 
 
 class AdmissionDiffChecker:
     def __init__(self):
-        self.old_admission_map = set()
+        self.old_admission_map = {}
         self.header_row = None
         self.diff_rows = []
         self.same_rows = []
@@ -16,15 +18,12 @@ class AdmissionDiffChecker:
         )  # adjust filename for each usecase
         ws = wb.active
         for row in ws.iter_rows(
-            min_row=1, max_row=91, values_only=True
+            min_row=2, max_row=91, values_only=False
         ):  # adjust max row depending on number of entries of relevant semester
-            # Write header row for result
-            if not self.header_row:
-                self.header_row = row
+            if not row[4].value or not row[5].value:
                 continue
-            if not row[4] or not row[5]:
-                continue
-            self.old_admission_map.add(row[4] + row[5])
+            student_name = row[4].value + row[5].value
+            self.old_admission_map[student_name] = copy(row[11].fill)
 
     def load_and_compare_newer_worksheet(self):
         print("Parsing Newer Worksheet")
@@ -33,18 +32,22 @@ class AdmissionDiffChecker:
         )  # adjust filename for each usecase
         ws = wb.active
         for row in ws.iter_rows(
-            min_row=2, max_row=91, values_only=True
+            min_row=1, max_row=91, values_only=True
         ):  # adjust max row depending on number of entries of relevant semester
+            # Write header row for result
+            if not self.header_row:
+                self.header_row = row
+                continue
             if not row[4] or not row[5]:
                 continue
             name = row[4] + row[5]
             if name not in self.old_admission_map:
                 self.diff_rows.append(row)
+                # This is for de-duplication, add a default white colour background
+                self.old_admission_map[name] = None
             # Save old entries for creating excl with old+new entries
             else:
                 self.same_rows.append(row)
-            # This is for de-duplication
-            self.old_admission_map.add(name)
 
     def write_result_to_new_worksheet(self):
 
@@ -52,9 +55,9 @@ class AdmissionDiffChecker:
         wb = Workbook()
         ws = wb.active
         # Sort by surname
-        self.diff_rows.sort(key=lambda row: row[4])
-        self.same_rows.sort(key=lambda row: row[4])
-        ws.append(checker.header_row)
+        self.diff_rows.sort(key=lambda row: row[4].lower())
+        self.same_rows.sort(key=lambda row: row[4].lower())
+        ws.append(self.header_row)
         for row in self.diff_rows:
             ws.append(row)
         wb.save("assets/only_diff.xlsx")
@@ -62,12 +65,17 @@ class AdmissionDiffChecker:
         # Excl of all entries
         wb2 = Workbook()
         ws = wb2.active
-        ws.append(checker.header_row)
+        ws.append(self.header_row)
         for row in self.diff_rows:
             ws.append(row)
         ws.append([])
-        for row in self.same_rows:
+
+        same_rows_start = len(self.diff_rows) + 3
+        for i, row in enumerate(self.same_rows):
             ws.append(row)
+            name = row[4] + row[5]
+            if self.old_admission_map[name]:
+                ws[f"L{same_rows_start + i}"].fill = self.old_admission_map[name]
         wb2.save("assets/all_entries_sorted.xlsx")
         """
         unsorted = pd.read_excel("assets/all_entries1.xlsx")
