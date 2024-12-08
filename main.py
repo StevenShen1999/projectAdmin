@@ -23,6 +23,7 @@ class AdmissionDiffChecker:
             if not row[4].value or not row[5].value:
                 continue
             student_name = row[4].value + row[5].value
+            # We just copy the current style applied to the L column (admission status)
             self.old_admission_map[student_name] = copy(row[11].fill)
 
     def load_and_compare_newer_worksheet(self):
@@ -74,6 +75,7 @@ class AdmissionDiffChecker:
         for i, row in enumerate(self.same_rows):
             ws.append(row)
             name = row[4] + row[5]
+            # Apply appropriate styling
             if self.old_admission_map[name]:
                 ws[f"L{same_rows_start + i}"].fill = self.old_admission_map[name]
         wb2.save("assets/all_entries_sorted.xlsx")
